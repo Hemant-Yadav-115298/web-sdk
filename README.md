@@ -93,6 +93,7 @@ WIth out any error messages showing up, you are good to continue.
 ## Run in Storybook
 
 ```
+pnpm add -w -D cross-env
 pnpm run storybook --filter=lines
 ```
 
