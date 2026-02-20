@@ -1,10 +1,10 @@
 # Mock RGS Server — Local Development Guide
 
-Run the game in dev mode **fully offline** without a real RGS backend.
+Run games in dev mode **fully offline** without a real RGS backend.
 
 ---
 
-## Quick Start
+## Quick Start — Lines
 
 **Terminal 1** — Start the mock server:
 
@@ -24,11 +24,38 @@ pnpm run dev --filter=lines
 http://localhost:3001/?rgs_url=localhost:3456&sessionID=mock-session&lang=en
 ```
 
+## Quick Start — Ways
+
+**Terminal 1** — Start the mock server:
+
+```bash
+node mock-rgs-server-ways.mjs
+```
+
+**Terminal 2** — Start the game:
+
+```bash
+pnpm run dev --filter=ways
+```
+
+**Browser** — Open:
+
+```
+http://localhost:3001/?rgs_url=localhost:3457&sessionID=mock-session&lang=en
+```
+
+> **Note:** The two mock servers use different ports (3456 for lines, 3457 for ways) so they can run simultaneously.
+
 ---
 
 ## What It Does
 
-The mock server (`mock-rgs-server.mjs`) is a zero-dependency Node.js HTTP server that emulates all RGS endpoints. It runs on **port 3456** and returns realistic game data so the full game loop works locally.
+The mock server (`mock-rgs-server.mjs` / `mock-rgs-server-ways.mjs`) is a zero-dependency Node.js HTTP server that emulates all RGS endpoints. It returns realistic game data so the full game loop works locally.
+
+| Game  | File                        | Port | Mechanics                                      |
+| ----- | --------------------------- | ---- | ---------------------------------------------- |
+| Lines | `mock-rgs-server.mjs`       | 3456 | 5×5 board, line-based wins, 12 free spins      |
+| Ways  | `mock-rgs-server-ways.mjs`  | 3457 | 5×5 board, ways-pays, wild multipliers, 15 FS  |
 
 ### Mocked Endpoints
 
@@ -45,9 +72,9 @@ The mock server (`mock-rgs-server.mjs`) is a zero-dependency Node.js HTTP server
 | `/bet/replay/*`         | GET    | Returns a random book for replay mode     |
 | `/` or `/health`        | GET    | Health check                              |
 
-### Sample Books Included
+### Sample Books — Lines
 
-The server embeds **6 sample books** covering all common game outcomes:
+The Lines mock server embeds **6 sample books** covering all common game outcomes:
 
 | Book | Payout Multiplier | Type                          |
 | ---- | ----------------- | ----------------------------- |
@@ -58,7 +85,20 @@ The server embeds **6 sample books** covering all common game outcomes:
 | 5    | 0.5x              | Small win (L4 match)          |
 | 6    | 3.9x              | Bonus round with 12 free spins |
 
-Each play request randomly picks one of these books so you'll see a mix of wins, losses, and bonus triggers.
+### Sample Books — Ways
+
+The Ways mock server embeds **6 sample books** with ways-pays mechanics:
+
+| Book | Payout Multiplier | Type                                            |
+| ---- | ----------------- | ----------------------------------------------- |
+| 1    | 0.0x              | No win                                          |
+| 2    | 1.7x              | Small ways win (L4 + L3)                        |
+| 3    | 5.0x              | Medium win (H1 4-of-a-kind, 4 ways)             |
+| 4    | 0.0x              | No win (different board)                         |
+| 5    | 0.4x              | Small win (H5 3-of-a-kind)                       |
+| 6    | 32.3x             | Bonus: 15 free spins with wild multipliers (×3, ×5) |
+
+Each play request randomly picks one book so you'll see a mix of wins, losses, and bonus triggers.
 
 ### Mock Balance
 
@@ -72,13 +112,22 @@ Each play request randomly picks one of these books so you'll see a mix of wins,
 
 ### Changes Made
 
-#### 1. `mock-rgs-server.mjs` (new file, project root)
+#### 1. `mock-rgs-server.mjs` (new file — Lines)
 
-Standalone Node.js HTTP server with:
+Standalone Node.js HTTP server for the **Lines** game with:
 - All RGS API endpoints with CORS support
 - Embedded sample book data from `apps/lines/src/stories/data/`
 - Realistic balance tracking and payout calculation
 - Console logging for every request
+
+#### 1b. `mock-rgs-server-ways.mjs` (new file — Ways)
+
+Standalone Node.js HTTP server for the **Ways** game with:
+- Ways-pays win mechanics (`ways`, `globalMult`, `winWithoutMult`, `symbolMult`)
+- Wild symbols with multipliers (1-5× during free games)
+- `betModes` config: `BASE` (1×) and `BONUS` (100× buy bonus)
+- 15 free spins with `freeSpinTrigger`, `updateFreeSpin`, `freeSpinEnd` events
+- Runs on port 3457 (different from Lines on 3456)
 
 #### 2. `packages/rgs-fetcher/src/rgsFetcher.ts` (modified)
 
@@ -96,8 +145,17 @@ const getProtocol = (rgsUrl: string) => {
 Added convenience scripts:
 
 ```json
-"dev:mock": "node ../../mock-rgs-server.mjs & vite dev --host --port 3001 --open \"/?rgs_url=localhost:3456&sessionID=mock-session&lang=en\"",
-"dev:mock:win": "start /B node ../../mock-rgs-server.mjs && vite dev --host --port 3001 --open \"/?rgs_url=localhost:3456&sessionID=mock-session&lang=en\""
+"dev:mock": "node ../../mock-rgs-server.mjs & vite dev --host --port 3001",
+"dev:mock:win": "start /B node ../../mock-rgs-server.mjs && vite dev --host --port 3001"
+```
+
+#### 3b. `apps/ways/package.json` (modified)
+
+Added convenience scripts:
+
+```json
+"dev:mock": "node ../../mock-rgs-server-ways.mjs & vite dev --host --port 3001",
+"dev:mock:win": "start /B node ../../mock-rgs-server-ways.mjs && vite dev --host --port 3001"
 ```
 
 - `dev:mock` — for macOS/Linux (uses `&` for background process)
@@ -109,11 +167,11 @@ Added convenience scripts:
 
 The game reads configuration from query string parameters. For mock mode, use:
 
-| Parameter   | Value              | Description                  |
-| ----------- | ------------------ | ---------------------------- |
-| `rgs_url`   | `localhost:3456`   | Points to the mock server    |
-| `sessionID` | `mock-session`     | Any non-empty string works   |
-| `lang`      | `en`               | Language code (en, pt, etc.) |
+| Parameter   | Lines Value        | Ways Value         | Description                  |
+| ----------- | ------------------ | ------------------ | ---------------------------- |
+| `rgs_url`   | `localhost:3456`   | `localhost:3457`   | Points to the mock server    |
+| `sessionID` | `mock-session`     | `mock-session`     | Any non-empty string works   |
+| `lang`      | `en`               | `en`               | Language code (en, pt, etc.) |
 
 Optional parameters also work: `currency`, `device`, `social`, `demo`.
 
@@ -127,11 +185,11 @@ To connect to a real RGS, simply use the real query string parameters from Stake
 
 ## Troubleshooting
 
-| Problem                              | Solution                                                              |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| Error screen on game load            | Make sure mock server is running (`node mock-rgs-server.mjs`)         |
-| `fetch failed` / network error       | Check that `rgs_url=localhost:3456` is in the browser URL             |
-| Port 3456 already in use             | Kill the old process or change `PORT` in `mock-rgs-server.mjs`        |
-| CORS errors in browser console       | The mock server includes CORS headers — restart it if they're missing |
-| Game loads but spins don't work      | Check the mock server terminal for request logs                       |
-| Balance goes negative                | Restart the mock server to reset to $10,000                           |
+| Problem                              | Solution                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| Error screen on game load            | Make sure the correct mock server is running for your game                      |
+| `fetch failed` / network error       | Check that `rgs_url=localhost:3456` (or `:3457`) is in the browser URL          |
+| Port already in use                  | Kill the old process or change `PORT` in the mock server file                   |
+| CORS errors in browser console       | The mock server includes CORS headers — restart it if they're missing          |
+| Game loads but spins don't work      | Check the mock server terminal for request logs                                |
+| Balance goes negative                | Restart the mock server to reset to $10,000                                    |
